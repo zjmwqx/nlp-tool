@@ -7,35 +7,77 @@ import com.hankcs.hanlp.corpus.tag.Nature
 import com.hankcs.hanlp.seg.Segment
 import com.hankcs.hanlp.seg.common.Term
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
 /**
  * Created by admin on 10/14/15.
  */
 object SegmentDemo {
+  def convertHanNumber(source:String): String ={
+    var temp = source.replaceAll("[一二三四五六七八九零]", "1")
+//    temp = temp.replaceAll("\\s", "")
+    temp
+  }
   def main(args:Array[String]): Unit ={
-    val testCase: Array[String] = Array[String](
-      "商品和服务", "结婚的和尚未结婚的确实在干扰分词啊",
-      "买水果然后来世博园最后去世博会", "中国的首都是北京",
-      "欢迎新老师生前来就餐",
-      "工信处女干事每月经过下属科室都要亲口交代24口交换机等技术性器件的安装工作",
-      "随着页游兴起到现在的页游繁盛，依赖于存档进行逻辑判断的设计减少了，但这块也不能完全忽略掉。",
-      "这只票，千万不要慌，跟随市场做出判断和决定才好的方案600778这q上得组，。新老股民聚集，不少朋友都在里面商研这股，有的朋友速来了")
-    val out = new PrintWriter("test.seg.data")
-    val segment: Segment = HanLP.newSegment()
+    val out = new PrintWriter("../../iwencai/corpus/seg.data.pinyin")
+    val segment: Segment = HanLP.newSegment().enableNameRecognize(true)
+
     segment.enablePartOfSpeechTagging(true)
-    for (line <- Source.fromFile("test.data", "UTF-8").getLines()) {
+//    val splitsToParse = new ArrayBuffer[String]()
+//    val sourceToParse = new ArrayBuffer[String]()
+    for (line <- Source.fromFile("../../iwencai/corpus/train.data", "UTF-8").getLines()) {
       val splits = line.split("\t")
       var segString = ""
-      if(splits.size == 3)
-        segString = segment.seg(splits(2)).asScala.toList.map(x => {
-          if(x.nature == Nature.m)
-            x.word(0) + "NUM" + x.word.length
+      if(splits.size == 3) {
+        //to simplofied chinese
+        val simplifiedChinese = HanLP.convertToSimplifiedChinese(splits(2))
+        val processedString = convertHanNumber(simplifiedChinese)
+        val segList = segment.seg(processedString).asScala.toList
+        segString = (for (i <- 0 until segList.size) yield {
+          if (segList(i).nature == Nature.m) {
+            val sb = new StringBuffer("NUM" + segList(i).word.length)
+            if(i > 0)
+              sb.append(" " + segList(i - 1).word + "NUM" + segList(i).word.length)
+            if(i < segList.size - 1)
+              sb.append(" " + "NUM" + segList(i).word.length + segList(i + 1).word)
+            if(i < segList.size - 2)
+              sb.append(" " + "NUM" + segList(i).word.length + segList(i + 2).word)
+            if(i > 1)
+              sb.append(" " + segList(i - 2).word + "NUM" + segList(i).word.length)
+            sb.toString
+          }
+          else if (segList(i).nature == Nature.nr) {
+            "NR" + segList(i).word.length + " " + segList(i).word
+          }
           else
-            x.word
-        }).mkString(" ")
-      out.println(segString)
+            segList(i).word
+        }).map(
+            wd => wd + " " + HanLP.convertToPinyinList(wd).asScala.map(py => py.toString).mkString("")
+          )
+          .mkString(" ")
+      }
+      //
+//      sourceToParse.append(line)
+//      splitsToParse.append(segString)
+      out.println(line + "\t" + segString)
     }
+//    val repBuf = new ArrayBuffer[Int]
+//    for(split1 <- splitsToParse){
+//      var maxRep = 0
+//      if(split1.length > 20)
+//        for(split2 <- splitsToParse){
+//          if( split2.length > 20){
+////            if(LCS.get(split1, split2) / split1.length + 0.0 > 0.8)
+//              if(split1 == split2)
+//              maxRep += 1
+//          }
+//        }
+//      repBuf.append(maxRep)
+//    }
+//    for(i <- 0 until splitsToParse.size){
+//      out.println(sourceToParse(i) + "\t" + splitsToParse(i) + " " + "REP"+ (repBuf(i)/3))
+//    }
     out.close()
   }
 }
